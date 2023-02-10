@@ -1,10 +1,16 @@
 package mr
 
-import "fmt"
-import "log"
-import "net/rpc"
-import "hash/fnv"
+import (
+	"fmt"
+	"hash/fnv"
+	"log"
+	"net/rpc"
+	"os"
+)
 
+/*
+orders:  Worker() -> askForTask() -> call() -> coordinatorSock() from rpc.go
+*/
 
 //
 // Map functions return a slice of KeyValue.
@@ -28,43 +34,27 @@ func ihash(key string) int {
 //
 // main/mrworker.go calls this function.
 //
-func Worker(mapf func(string, string) []KeyValue,
-	reducef func(string, []string) string) {
-
+func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string) string) {
 	// Your worker implementation here.
-
+	// iterate over a channel, receive tasks until run out
+    for {
+		task := askForTask()
+		fmt.Println("task...", task)
+		switch task.TaskState {
+		}
+	}
 	// uncomment to send the Example RPC to the coordinator.
 	// CallExample()
 
 }
 
-//
-// example function to show how to make an RPC call to the coordinator.
-//
-// the RPC argument and reply types are defined in rpc.go.
-//
-func CallExample() {
+// ask for task from master
+func askForTask() Task {
 
-	// declare an argument structure.
 	args := ExampleArgs{}
-
-	// fill in the argument(s).
-	args.X = 99
-
-	// declare a reply structure.
-	reply := ExampleReply{}
-
-	// send the RPC request, wait for the reply.
-	// the "Coordinator.Example" tells the
-	// receiving server that we'd like to call
-	// the Example() method of struct Coordinator.
-	ok := call("Coordinator.Example", &args, &reply)
-	if ok {
-		// reply.Y should be 100.
-		fmt.Printf("reply.Y %v\n", reply.Y)
-	} else {
-		fmt.Printf("call failed!\n")
-	}
+	reply := Task{}
+	call("Master.AssignTask", &args, &reply)
+	return reply
 }
 
 //
@@ -73,11 +63,13 @@ func CallExample() {
 // returns false if something goes wrong.
 //
 func call(rpcname string, args interface{}, reply interface{}) bool {
-	// c, err := rpc.DialHTTP("tcp", "127.0.0.1"+":1234")
+	// client, err := rpc.DialHTTP("tcp", "127.0.0.1"+":1234")
 	sockname := coordinatorSock()
 	c, err := rpc.DialHTTP("unix", sockname)
+	
 	if err != nil {
 		log.Fatal("dialing:", err)
+		os.Exit(0)
 	}
 	defer c.Close()
 
@@ -89,3 +81,33 @@ func call(rpcname string, args interface{}, reply interface{}) bool {
 	fmt.Println(err)
 	return false
 }
+
+//
+// example function to show how to make an RPC call to the coordinator.
+//
+// the RPC argument and reply types are defined in rpc.go.
+//
+// func CallExample() {
+
+// 	// declare an argument structure.
+// 	args := ExampleArgs{}
+
+// 	// fill in the argument(s).
+// 	args.X = 99
+
+// 	// declare a reply structure.
+// 	reply := ExampleReply{}
+
+// 	// send the RPC request, wait for the reply.
+// 	// the "Coordinator.Example" tells the
+// 	// receiving server that we'd like to call
+// 	// the Example() method of struct Coordinator.
+// 	ok := call("Coordinator.Example", &args, &reply)
+// 	if ok {
+// 		// reply.Y should be 100.
+// 		fmt.Printf("reply.Y %v\n", reply.Y)
+// 	} else {
+// 		fmt.Printf("call failed!\n")
+// 	}
+// }
+

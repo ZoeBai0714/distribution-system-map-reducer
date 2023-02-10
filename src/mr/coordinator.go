@@ -3,13 +3,34 @@ package mr
 import "log"
 import "net"
 import "os"
+import "sync"
 import "net/rpc"
 import "net/http"
 
+var mu sync.Mutex // refer to https://go.dev/tour/concurrency/9
+
+const (
+	Map State = iota
+	Reduce
+	Exit
+	Wait
+) // refer to the usage of iota https://www.gopherguides.com/articles/how-to-use-iota-in-golang
+
+type State int
 
 type Coordinator struct {
 	// Your definitions here.
+	CoordinatorPhase State
 
+}
+
+type Task struct {
+	Input string
+	Output string
+	TaskState State
+	TaskNumber int
+	NReducer int
+	Intermediates []string
 }
 
 // Your code here -- RPC handlers for the worker to call.
@@ -46,11 +67,9 @@ func (c *Coordinator) server() {
 // if the entire job has finished.
 //
 func (c *Coordinator) Done() bool {
-	ret := false
-
-	// Your code here.
-
-
+	mu.Lock()
+	defer mu.Unlock()
+	ret := c.CoordinatorPhase == Exit
 	return ret
 }
 
