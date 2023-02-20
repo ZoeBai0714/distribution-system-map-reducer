@@ -31,7 +31,7 @@ type Coordinator struct {
 	// Your definitions here.
 	CoordinatorPhase State
 	TaskQueue chan *Task// channel
-	TaskMeta map[int] *CoordinatorTasks
+	TaskMeta map[int] *CoordinatorTasks // key type is all int, value type is different, defined in CoordinatorTasks
 	NReduce int
 	InputFiles []string
 	Intermediates [][]string //an array of arrany, an intermediates storing each task info
@@ -70,10 +70,12 @@ func MakeCoordinator(files []string, nReduce int) *Coordinator {
 	}
 
 	// Your code here.
-	// create map task, 16-64mb
+	// create map task
 	c.createMapTask()
 
 	c.server()
+    // start a go routine to check timeout
+	go c.catchTimeOut()
 	return &c
 }
 
@@ -97,22 +99,7 @@ func (c *Coordinator) createMapTask(){
 	}
 }
 
-// Your code here -- RPC handlers for the worker to call.
-
-//
-// an example RPC handler.
-//
-// the RPC argument and reply types are defined in rpc.go.
-//
-func (c *Coordinator) Example(args *ExampleArgs, reply *ExampleReply) error {
-	reply.Y = args.X + 1
-	return nil
-}
-
-
-//
 // start a thread that listens for RPCs from worker.go
-//
 func (c *Coordinator) server() {
 	rpc.Register(c)
 	rpc.HandleHTTP()
@@ -125,6 +112,37 @@ func (c *Coordinator) server() {
 	}
 	go http.Serve(l, nil)
 }
+
+func (c *Coordinator) catchTimeOut(){
+	// infinite loop -- for without condition
+	for {
+		time.Sleep(5 * time.Second)
+		// mu.Lock()
+		if c.CoordinatorPhase == Exit {
+			// mu.Unlock()
+			return
+		}
+		for _, CoordinatorTask := range c.TaskMeta {
+			if CoordinatorTask.TaskStatus == InProgress && time.Now().Sub(CoordinatorTask.StartTime) > 10*time.Second {
+				c.TaskQueue <- CoordinatorTask.TaskReference
+				CoordinatorTask.TaskStatus = Idle
+			}
+		}
+	}
+}
+
+// Your code here -- RPC handlers for the worker to call.
+
+//
+// an example RPC handler.
+//
+// the RPC argument and reply types are defined in rpc.go.
+//
+func (c *Coordinator) Example(args *ExampleArgs, reply *ExampleReply) error {
+	reply.Y = args.X + 1
+	return nil
+}
+
 
 //
 // main/mrcoordinator.go calls Done() periodically to find out

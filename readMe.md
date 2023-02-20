@@ -10,6 +10,8 @@ How to run
 
 3. Build our coordinator (MakeCoordinator) for 1 to call upon. Once it gets called, it will grab the files, and create a task for each file.
 
+4. create a catchTimeout func to check if there's any task gets blocked(more than 10 seconds), if so put it back to the queue to have another worker work on it.
+
 Workflow (Design)
 
 src/mr/worker
