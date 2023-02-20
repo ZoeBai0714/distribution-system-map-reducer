@@ -53,7 +53,7 @@ func askForTask() Task {
 
 	args := ExampleArgs{}
 	reply := Task{}
-	call("Master.AssignTask", &args, &reply)
+	call("Coordinator.AssignTask", &args, &reply)
 	return reply
 }
 
