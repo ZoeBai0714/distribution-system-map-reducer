@@ -1,12 +1,14 @@
 package mr
 
 import (
+	"encoding/json"
 	"fmt"
 	"hash/fnv"
 	"io/ioutil"
 	"log"
 	"net/rpc"
 	"os"
+	"path/filepath"
 )
 
 /*
@@ -18,6 +20,7 @@ type KeyValue struct {
 	Key   string
 	Value string
 }
+
 
 // use ihash(key) % NReduce to choose the reduce
 // task number for each KeyValue emitted by Map.
@@ -36,8 +39,7 @@ func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string)
 		fmt.Println("task: ", task)
 		switch task.TaskState {
 		case Map:
-			// assign to mapper to get the file ready to be processed
-			// continue from here, create mapper function
+			mapper(&task, mapf)
 		}
 	}
 	// uncomment to send the Example RPC to the coordinator.
@@ -70,15 +72,39 @@ func mapper(task *Task, mapf func(string, string) []KeyValue) {
 		slot := ihash(intermediate.Key) % task.NReducer
 		buffer[slot] = append(buffer[slot], intermediate)
 	}
+	println("buffer ", buffer)
 	mapOutput := make([]string, 0)
 	for i := 0; i < task.NReducer; i++ {
 		mapOutput = append(mapOutput, writeToLocalFile(task.TaskNumber, i, &buffer[i]))
 	}
+	println("mapOutput ", mapOutput)
+	task.Intermediates = mapOutput
+	TaskComplete(task)
 }
 
 func writeToLocalFile(taskNumber int, i int, buffer *[]KeyValue) string {
-	return "hi"
-	// continue from here, maybe we don't need to buffer to nReduce, just write intermediates the whole thing to file
+	// find current directory
+	dir, _:= os.Getwd()
+	tempFile, err := ioutil.TempFile(dir, "mr-tmp-*")
+	if err != nil {
+		log.Fatal("Failed to create a temp file", err)
+	}
+	encode := json.NewEncoder(tempFile)
+	for _, kv := range *buffer {
+		if err := encode.Encode(&kv); err != nil {
+			log.Fatal("Failed to write key value pair")
+		}
+	}
+	tempFile.Close()
+	outputName := fmt.Sprintf("mr-%d-%d", taskNumber, i)
+	os.Rename(tempFile.Name(), outputName)
+	return filepath.Join(dir, outputName)
+}
+
+func TaskComplete(task *Task) {
+	// send the intermediates to Coordinator through RPC
+	reply := ExampleReply{}
+	call("Coordinator.TaskCompleted", &task, &reply)
 }
 
 // send an RPC request to the coordinator, wait for the response.

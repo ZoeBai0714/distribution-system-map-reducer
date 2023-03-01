@@ -79,6 +79,13 @@ func MakeCoordinator(files []string, nReduce int) *Coordinator {
 	return &c
 }
 
+func max(a int, b int) int {
+	if a > b{
+		return a
+	}
+	return b
+}
+
 // arg before function meaning this function is a method of type Coordinator, we operate it on object c so we can call c.createMapTask
 // reference: https://www.linkedin.com/pulse/go-things-parenthesis-before-function-name-shivam-chaurasia/
 func (c *Coordinator) createMapTask(){
@@ -171,9 +178,30 @@ func (c *Coordinator) AssignTask(args *ExampleArgs, reply *Task) error {
 	return nil
 }
 
-func max(a int, b int) int {
-	if a > b{
-		return a
+func (c *Coordinator) TaskCompleted(task *Task, reply * ExampleReply) error {
+	mu.Lock()
+	// at this point the taskState of a task is still map. Assigned in createMapTask
+	if task.TaskState != c.CoordinatorPhase || c.TaskMeta[task.TaskNumber].TaskStatus == Completed {
+		return nil
 	}
-	return b
+	c.TaskMeta[task.TaskNumber].TaskStatus = Completed
+	mu.Unlock()
+	defer c.processTaskResult(task)
+	return nil
+}
+
+func (c *Coordinator) processTaskResult(task *Task) {
+	mu.Lock()
+	defer mu.Unlock()
+	switch task.TaskState {
+	case Map:
+		for reduceTaskId, filePath := range task.Intermediates{
+			c.Intermediates[reduceTaskId] = append(c.Intermediates[reduceTaskId], filePath)
+		}
+		if c.allTaskDone(){
+			c.createReduceTask()
+			c.CoordinatorPhase = Reduce
+			// CONTINUE FROM HERE!
+		}
+	}
 }
