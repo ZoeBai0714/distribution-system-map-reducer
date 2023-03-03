@@ -9,6 +9,7 @@ import (
 	"net/rpc"
 	"os"
 	"path/filepath"
+	"sort"
 )
 
 /*
@@ -21,6 +22,11 @@ type KeyValue struct {
 	Value string
 }
 
+// for sorting by key.
+type ByKey []KeyValue
+func (a ByKey) Len() int           { return len(a) }
+func (a ByKey) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a ByKey) Less(i, j int) bool { return a[i].Key < a[j].Key }
 
 // use ihash(key) % NReduce to choose the reduce
 // task number for each KeyValue emitted by Map.
@@ -40,10 +46,10 @@ func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string)
 		switch task.TaskState {
 		case Map:
 			mapper(&task, mapf)
+		case Reduce:
+			reducer(&task, reducef)
 		}
 	}
-	// uncomment to send the Example RPC to the coordinator.
-	// CallExample()
 
 }
 
@@ -131,32 +137,57 @@ func call(rpcname string, args interface{}, reply interface{}) bool {
 	return false
 }
 
-//
-// example function to show how to make an RPC call to the coordinator.
-//
-// the RPC argument and reply types are defined in rpc.go.
-//
-// func CallExample() {
+func reducer(task *Task, reducef func(string, []string) string) {
+	intermediate := *readFromLocalFile(task.Intermediates)
+	sort.Sort(ByKey(intermediate))
 
-// 	// declare an argument structure.
-// 	args := ExampleArgs{}
+	dir, _:= os.Getwd()
+	tempFile, err := ioutil.TempFile(dir, "mr-temp-*")
+	if err != nil {
+		log.Fatal("Failed to reduce file", err)
+	}
 
-// 	// fill in the argument(s).
-// 	args.X = 99
+	// mrsequential.go
+	i := 0
+	for i < len(intermediate) {
+		j := i + 1
+		for j < len(intermediate) && intermediate[j].Key == intermediate[i].Key {
+			j++
+		}
+		values := []string{}
+		for k := i; k < j; k++ {
+			values = append(values, intermediate[k].Value)
+		}
+		output := reducef(intermediate[i].Key, values)
 
-// 	// declare a reply structure.
-// 	reply := ExampleReply{}
+		// this is the correct format for each line of Reduce output.
+		fmt.Fprintf(tempFile, "%v %v\n", intermediate[i].Key, output)
 
-// 	// send the RPC request, wait for the reply.
-// 	// the "Coordinator.Example" tells the
-// 	// receiving server that we'd like to call
-// 	// the Example() method of struct Coordinator.
-// 	ok := call("Coordinator.Example", &args, &reply)
-// 	if ok {
-// 		// reply.Y should be 100.
-// 		fmt.Printf("reply.Y %v\n", reply.Y)
-// 	} else {
-// 		fmt.Printf("call failed!\n")
-// 	}
-// }
+		i = j
+	}
+	tempFile.Close()
+	filename := fmt.Sprintf("mr-out-%d", task.TaskNumber)
+	os.Rename(tempFile.Name(),filename)
+	task.Output = filename
+	TaskComplete(task) // Continue from here! Call complete again when reduce is done
+}
 
+func readFromLocalFile(files []string) *[]KeyValue {
+	keyValueList := []KeyValue{}
+	for _, filepath := range files {
+		file, err := os.Open(filepath)
+		if err != nil {
+			log.Fatal("Failed to open to read file" + filepath, err)
+		}
+		doc := json.NewDecoder(file)
+		for {
+			var kv KeyValue
+			if err := doc.Decode(&kv); err != nil {
+				break
+			}
+			keyValueList = append(keyValueList, kv)
+		}
+		file.Close()
+	}
+	return &keyValueList
+}

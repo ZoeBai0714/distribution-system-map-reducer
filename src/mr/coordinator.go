@@ -200,8 +200,36 @@ func (c *Coordinator) processTaskResult(task *Task) {
 		}
 		if c.allTaskDone(){
 			c.createReduceTask()
+			println("hello")
 			c.CoordinatorPhase = Reduce
 			// CONTINUE FROM HERE!
+		}
+	}
+}
+
+func (c *Coordinator) allTaskDone()bool {
+	for _, task := range c.TaskMeta {
+		if task.TaskStatus != Completed {
+			return false
+		}
+	}
+
+	return true
+}
+
+func (c *Coordinator) createReduceTask() {
+	c.TaskMeta = make(map[int]*CoordinatorTasks)
+	for idx, file := range c.Intermediates{
+		taskMeta := Task {
+			TaskState: Reduce,
+			NReducer: c.NReduce,
+			TaskNumber: idx,
+			Intermediates: file,
+		}
+		c.TaskQueue <- &taskMeta
+		c.TaskMeta[idx] = &CoordinatorTasks{
+			TaskStatus: Idle,
+			TaskReference: &taskMeta,
 		}
 	}
 }
