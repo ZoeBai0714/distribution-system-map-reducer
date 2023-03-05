@@ -14,9 +14,12 @@ How to run
    go run mrworker.go wc.so
 
 5. Start to build worker that controls mapper and reducer. Once it gets a task from #4, check which status is the task in and act coordingly.
-   If a task is still in Map status, meaning it hasn't been processed, then we process it. After done we write it to local file and assign it to intermediate. Then map job is now complete, let tell coordinatpr about it with func TaskCompleted through rpc
+   It's first Map, this will call mapper function to read each file task, and then for each file task, slot theem in NReducer by word(using iHash function pre-defined) After done we write it to local file and assign it to intermediate. 
+   
+   Then map job is now complete, let tell coordinatpr about it with func TaskCompleted through rpc. Once all the task files finished the mapping job, the taskState will go into next phase Reduce.
 
-6. Inside TaskCompleted, start to process the content in the intermediate that we saved earlier
+   Reduce will combine the slots back to a file
+
 
 Workflow (Design)
 

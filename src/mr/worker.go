@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"time"
 )
 
 /*
@@ -42,12 +43,15 @@ func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string)
 	// Your worker implementation here.
     for {
 		task := askForTask()
-		fmt.Println("task: ", task)
 		switch task.TaskState {
 		case Map:
 			mapper(&task, mapf)
 		case Reduce:
 			reducer(&task, reducef)
+		case Wait:
+			time.Sleep(5 * time.Second)
+		case Exit:
+			return
 		}
 	}
 
@@ -63,7 +67,7 @@ func askForTask() Task {
 }
 
 func mapper(task *Task, mapf func(string, string) []KeyValue) {
-
+    println("task ", task)
 	content, err := ioutil.ReadFile(task.Input)
 
 	if err != nil {
@@ -71,14 +75,27 @@ func mapper(task *Task, mapf func(string, string) []KeyValue) {
 	}
 
 	// parse the content to map function that emits an array of key value pair
-	// then store them in buffer,
+	// then store them in buffer, with task.NReducer slots (note, the slots here is optional)
 	intermediates := mapf(task.Input, string(content))
+	
 	buffer := make([][]KeyValue, task.NReducer)
 	for _, intermediate := range intermediates {
+		// println("intermediate.Key ", intermediate.Key)
+		/* ihash ---> to categorize the slot number by word. This is what the log looks liks. Certain words are in the same bucket, like the, project, gutenberg, of are assigned to slot 6 
+
+		intermediate.Key  The
+		intermediate.Key  Project
+		intermediate.Key  Gutenberg
+		intermediate.Key  eBook
+		intermediate.Key  The
+		intermediate.Key  Importance
+		intermediate.Key  of 
+		*/
 		slot := ihash(intermediate.Key) % task.NReducer
+		println("slot ", slot)
 		buffer[slot] = append(buffer[slot], intermediate)
 	}
-	println("buffer ", buffer)
+	// generate a file for each slot
 	mapOutput := make([]string, 0)
 	for i := 0; i < task.NReducer; i++ {
 		mapOutput = append(mapOutput, writeToLocalFile(task.TaskNumber, i, &buffer[i]))
@@ -147,7 +164,8 @@ func reducer(task *Task, reducef func(string, []string) string) {
 		log.Fatal("Failed to reduce file", err)
 	}
 
-	// mrsequential.go
+	// this is from mrsequential.go
+	// combine slots into a single file for each txt file that got split into NReducer size in mapper
 	i := 0
 	for i < len(intermediate) {
 		j := i + 1
@@ -169,7 +187,7 @@ func reducer(task *Task, reducef func(string, []string) string) {
 	filename := fmt.Sprintf("mr-out-%d", task.TaskNumber)
 	os.Rename(tempFile.Name(),filename)
 	task.Output = filename
-	TaskComplete(task) // Continue from here! Call complete again when reduce is done
+	TaskComplete(task)
 }
 
 func readFromLocalFile(files []string) *[]KeyValue {

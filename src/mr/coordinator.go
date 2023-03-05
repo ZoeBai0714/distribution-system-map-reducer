@@ -138,19 +138,6 @@ func (c *Coordinator) catchTimeOut(){
 	}
 }
 
-// Your code here -- RPC handlers for the worker to call.
-
-//
-// an example RPC handler.
-//
-// the RPC argument and reply types are defined in rpc.go.
-//
-func (c *Coordinator) Example(args *ExampleArgs, reply *ExampleReply) error {
-	reply.Y = args.X + 1
-	return nil
-}
-
-
 //
 // main/mrcoordinator.go calls Done() periodically to find out
 // if the entire job has finished.
@@ -180,7 +167,8 @@ func (c *Coordinator) AssignTask(args *ExampleArgs, reply *Task) error {
 
 func (c *Coordinator) TaskCompleted(task *Task, reply * ExampleReply) error {
 	mu.Lock()
-	// at this point the taskState of a task is still map. Assigned in createMapTask
+	// Once it's assigned to Map, at this point the taskState of a task is still map. Assigned in createMapTask
+	// The task state is always the same as CoordinatorPhase, b/c it stays in Map until all mapper done and then it will go to the next phase. See func processTaskResult. It calls allTaskDone before next state
 	if task.TaskState != c.CoordinatorPhase || c.TaskMeta[task.TaskNumber].TaskStatus == Completed {
 		return nil
 	}
@@ -200,9 +188,11 @@ func (c *Coordinator) processTaskResult(task *Task) {
 		}
 		if c.allTaskDone(){
 			c.createReduceTask()
-			println("hello")
 			c.CoordinatorPhase = Reduce
-			// CONTINUE FROM HERE!
+		}
+	case Reduce:
+		if c.allTaskDone(){
+			c.CoordinatorPhase = Exit
 		}
 	}
 }
