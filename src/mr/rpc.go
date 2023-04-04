@@ -2,7 +2,6 @@ package mr
 
 //
 // RPC definitions.
-//
 // remember to capitalize all names.
 //
 

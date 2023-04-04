@@ -107,13 +107,14 @@ func (c *Coordinator) createMapTask(){
 }
 
 // start a thread that listens for RPCs from worker.go
+// read rpc package here: https://pkg.go.dev/net/rpc  see example code from onward #The server calls (for HTTP service)
 func (c *Coordinator) server() {
 	rpc.Register(c)
 	rpc.HandleHTTP()
 	//l, e := net.Listen("tcp", ":1234")
 	sockname := coordinatorSock()
 	os.Remove(sockname)
-	l, e := net.Listen("unix", sockname)
+	l, e := net.Listen("unix", sockname)  // In real world this would be a TCP connection, something like l, e := net.Listen("tcp", ":1234")
 	if e != nil {
 		log.Fatal("listen error:", e)
 	}
